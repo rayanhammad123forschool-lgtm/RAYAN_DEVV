@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ramadan Elite 🌙</title>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #ff9d00;
+            --bg: #0f172a;
+            --glass: rgba(255, 255, 255, 0.1);
+            --text: #f8fafc;
+        }
+
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', sans-serif;
+            background: radial-gradient(circle at top right, #1e293b, #0f172a);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(15px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 2rem;
+            border-radius: 30px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            width: 95%;
+            max-width: 450px;
+            text-align: center;
+            position: relative;
+        }
+
+        .header h1 { font-size: 1.8rem; margin: 0; color: var(--primary); }
+        
+        .progress-container {
+            width: 100%;
+            height: 6px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 10px;
+            margin: 1.5rem 0;
+            overflow: hidden;
+        }
+        #progressBar {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary), #fff);
+            transition: width 1s linear;
+        }
+
+        #countdown {
+            font-size: 3.5rem;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: -2px;
+        }
+
+        .selectors {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 1.5rem;
+        }
+
+        select {
+            padding: 12px;
+            border-radius: 12px;
+            border: none;
+            background: rgba(255, 255, 255, 0.15);
+            color: white;
+            font-size: 0.9rem;
+            cursor: pointer;
+            outline: none;
+        }
+
+        select option { background: #1e293b; color: white; }
+
+        .prayer-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 8px;
+            margin-top: 20px;
+        }
+
+        .prayer-card {
+            background: rgba(255,255,255,0.05);
+            padding: 10px 4px;
+            border-radius: 12px;
+            transition: 0.3s;
+            border: 1px solid transparent;
+        }
+
+        /* The highlight for the current/next prayer */
+        .prayer-card.highlight {
+            border: 1px solid var(--primary);
+            background: rgba(255, 157, 0, 0.15);
+            transform: scale(1.05);
+        }
+
+        .label { display: block; font-size: 0.6rem; text-transform: uppercase; font-weight: bold; opacity: 0.7; }
+        .time { font-size: 0.8rem; font-weight: bold; }
+
+        #duaModal {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 85%;
+            background: #1e293b;
+            padding: 25px;
+            border-radius: 20px;
+            border: 2px solid var(--primary);
+            z-index: 10;
+            box-shadow: 0 0 40px rgba(0,0,0,0.8);
+        }
+
+        footer { margin-top: 2rem; font-size: 0.75rem; opacity: 0.6; }
+    </style>
+</head>
+<body>
+
+    <div class="card">
+        <div id="duaModal">
+            <h3 style="color:var(--primary); margin-top:0;">Time to Break Fast!</h3>
+            <p style="font-size: 1rem; line-height: 1.4;">"Dhahaba az-Zama’u wabtallat al-‘Urooq, wa thabata al-ajru in sha’ Allah."</p>
+            <button onclick="closeDua()" style="background:var(--primary); border:none; padding:10px 20px; border-radius:10px; cursor:pointer; font-weight:bold;">Ameen</button>
+        </div>
+
+        <div class="header">
+            <h1><i class="fas fa-moon"></i> Ramadan Elite</h1>
+            <p id="currentCity" style="font-size: 0.9rem; opacity: 0.8;">Loading...</p>
+        </div>
+
+        <div class="progress-container">
+            <div id="progressBar"></div>
+        </div>
+
+        <div id="countdown">00:00:00</div>
+        <p style="font-size: 0.7rem; opacity: 0.5; margin-top: -10px; letter-spacing: 2px;">UNTIL IFTAR</p>
+
+        <div class="selectors">
+            <select id="countrySelect" onchange="handleCountryChange()">
+                <option value="">Country</option>
+                <option value="SA">Saudi Arabia</option>
+                <option value="AE">UAE</option>
+                <option value="EG">Egypt</option>
+                <option value="JO">Jordan</option>
+                <option value="GB">UK</option>
+                <option value="US">USA</option>
+                <option value="PK">Pakistan</option>
+                <option value="MY">Malaysia</option>
+            </select>
+            <select id="citySelect" onchange="updateBySelection()">
+                <option value="">City</option>
+            </select>
+        </div>
+
+        <div class="prayer-grid" id="prayerGrid"></div>
+
+        <footer>
+            <span id="date"></span><br>
+            Settings saved to your browser
+        </footer>
+    </div>
+
+    <audio id="adhanSound" src="https://cdn.islamic.network/audio/adhan/adhan.mp3"></audio>
+
+<script>
+let targetTime = null;
+let fajrTime = null;
+let prayerTimings = {};
+
+const cityData = {
+    "SA": ["Mecca", "Medina", "Riyadh", "Jeddah"],
+    "AE": ["Dubai", "Abu Dhabi", "Sharjah"],
+    "EG": ["Cairo", "Alexandria", "Luxor"],
+    "JO": ["Amman", "Irbid", "Aqaba"],
+    "GB": ["London", "Manchester", "Birmingham"],
+    "US": ["New York", "Los Angeles", "Chicago"],
+    "PK": ["Karachi", "Lahore", "Islamabad"],
+    "MY": ["Kuala Lumpur", "Penang"]
+};
+
+function handleCountryChange() {
+    const country = document.getElementById('countrySelect').value;
+    const citySelect = document.getElementById('citySelect');
+    citySelect.innerHTML = '<option value="">Select City</option>';
+    if(country && cityData[country]) {
+        cityData[country].forEach(city => {
+            let opt = document.createElement('option');
+            opt.value = city; opt.innerHTML = city;
+            citySelect.appendChild(opt);
+        });
+    }
+}
+
+async function fetchPrayers(city, country) {
+    if(!city || !country) return;
+    try {
+        const res = await fetch(`https://api.aladhan.com/v1/timingsByCity?city=${city}&country=${country}&method=2`);
+        const data = await res.json();
+        prayerTimings = data.data.timings;
+        targetTime = prayerTimings.Maghrib;
+        fajrTime = prayerTimings.Fajr;
+        
+        renderGrid();
+        document.getElementById('currentCity').innerText = `${city}, ${country}`;
+        document.getElementById('date').innerText = data.data.date.readable;
+    } catch (e) { console.error("Error"); }
+}
+
+function renderGrid() {
+    const grid = document.getElementById('prayerGrid');
+    const prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    grid.innerHTML = '';
+    
+    prayers.forEach(p => {
+        grid.innerHTML += `
+            <div class="prayer-card" id="card-${p}">
+                <span class="label">${p}</span>
+                <span class="time">${prayerTimings[p]}</span>
+            </div>`;
+    });
+    highlightNextPrayer();
+}
+
+function highlightNextPrayer() {
+    const now = new Date();
+    const currentTime = now.getHours() * 60 + now.getMinutes();
+    const prayers = ['Fajr', 'Dhuhr', 'Asr', 'Maghrib', 'Isha'];
+    
+    // Clear all highlights
+    prayers.forEach(p => document.getElementById(`card-${p}`)?.classList.remove('highlight'));
+
+    // Find the next one
+    for (let p of prayers) {
+        const [h, m] = prayerTimings[p].split(':');
+        const pTime = parseInt(h) * 60 + parseInt(m);
+        if (pTime > currentTime) {
+            document.getElementById(`card-${p}`).classList.add('highlight');
+            break;
+        }
+    }
+}
+
+function updateCountdown() {
+    if (!targetTime || !fajrTime) return;
+    const now = new Date();
+    const [mH, mM] = targetTime.split(':');
+    const [fH, fM] = fajrTime.split(':');
+    let iftar = new Date(); iftar.setHours(mH, mM, 0);
+    let suhoor = new Date(); suhoor.setHours(fH, fM, 0);
+
+    if (now > iftar) iftar.setDate(iftar.getDate() + 1);
+    const diff = iftar - now;
+    
+    const totalFastDuration = iftar - suhoor;
+    const currentProgress = ((totalFastDuration - diff) / totalFastDuration) * 100;
+    document.getElementById('progressBar').style.width = Math.min(Math.max(currentProgress, 0), 100) + "%";
+
+    const h = Math.floor(diff / 3600000).toString().padStart(2, '0');
+    const m = Math.floor((diff % 3600000) / 60000).toString().padStart(2, '0');
+    const s = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
+    document.getElementById('countdown').innerText = `${h}:${m}:${s}`;
+
+    if (diff < 1000 && diff > 0) {
+        document.getElementById('adhanSound').play();
+        document.getElementById('duaModal').style.display = 'block';
+    }
+}
+
+function updateBySelection() {
+    const country = document.getElementById('countrySelect').value;
+    const city = document.getElementById('citySelect').value;
+    if(city && country) {
+        localStorage.setItem('userCity', city);
+        localStorage.setItem('userCountry', country);
+        fetchPrayers(city, country);
+    }
+}
+
+function closeDua() { document.getElementById('duaModal').style.display = 'none'; }
+
+// Load Logic
+window.onload = () => {
+    const savedCity = localStorage.getItem('userCity');
+    const savedCountry = localStorage.getItem('userCountry');
+    if (savedCity && savedCountry) {
+        document.getElementById('countrySelect').value = savedCountry;
+        handleCountryChange();
+        document.getElementById('citySelect').value = savedCity;
+        fetchPrayers(savedCity, savedCountry);
+    } else {
+        document.getElementById('countrySelect').value = "SA";
+        handleCountryChange();
+        document.getElementById('citySelect').value = "Mecca";
+        updateBySelection();
+    }
+};
+
+setInterval(updateCountdown, 1000);
+setInterval(highlightNextPrayer, 60000); // Check next prayer every minute
+</script>
+</body>
+</html>
